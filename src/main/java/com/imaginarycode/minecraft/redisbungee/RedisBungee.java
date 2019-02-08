@@ -488,7 +488,7 @@ public final class RedisBungee extends Plugin {
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
     class PubSubListener implements Runnable {
         private JedisPubSubHandler jpsh;
-        private Set<String> addedChannels = new HashSet<String>();
+        private Set<String> addedChannels = new HashSet<>();
         
         @Override
         public void run() {
