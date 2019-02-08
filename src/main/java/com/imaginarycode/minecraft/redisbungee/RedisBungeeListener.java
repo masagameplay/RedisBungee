@@ -4,9 +4,6 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multiset;
-import com.google.common.io.ByteArrayDataInput;
-import com.google.common.io.ByteArrayDataOutput;
-import com.google.common.io.ByteStreams;
 import com.imaginarycode.minecraft.redisbungee.events.PubSubMessageEvent;
 import com.imaginarycode.minecraft.redisbungee.util.RedisCallable;
 import lombok.AllArgsConstructor;
@@ -25,6 +22,7 @@ import net.md_5.bungee.event.EventPriority;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Pipeline;
 
+import java.io.*;
 import java.net.InetAddress;
 import java.util.*;
 
@@ -148,17 +146,15 @@ public class RedisBungeeListener implements Listener {
 
     @EventHandler
     public void onPluginMessage(final PluginMessageEvent event) {
-        if (event.getTag().equals("RedisBungee") && event.getSender() instanceof Server) {
+        if (event.getTag().equals("BungeeCord") && event.getSender() instanceof Server) {
             final byte[] data = Arrays.copyOf(event.getData(), event.getData().length);
-            plugin.getProxy().getScheduler().runAsync(plugin, new Runnable() {
-                @Override
-                public void run() {
-                    ByteArrayDataInput in = ByteStreams.newDataInput(data);
-
-                    String subchannel = in.readUTF();
-                    ByteArrayDataOutput out = ByteStreams.newDataOutput();
+            plugin.getProxy().getScheduler().runAsync(plugin, () -> {
+                DataInputStream in = new DataInputStream(new ByteArrayInputStream(data));
+                String subchannel = null;
+                try (ByteArrayOutputStream b = new ByteArrayOutputStream();
+                     DataOutputStream out = new DataOutputStream(b)) {
+                    subchannel = in.readUTF();
                     String type;
-
                     switch (subchannel) {
                         case "PlayerList":
                             out.writeUTF("PlayerList");
@@ -244,13 +240,15 @@ public class RedisBungeeListener implements Listener {
                             return;
                     }
 
-                    ((Server) event.getSender()).sendData("RedisBungee", out.toByteArray());
+                    ((Server) event.getSender()).sendData("BungeeCord", b.toByteArray());
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
             });
         }
     }
 
-    private void serializeMultiset(Multiset<String> collection, ByteArrayDataOutput output) {
+    private void serializeMultiset(Multiset<String> collection, DataOutputStream output) throws IOException {
         output.writeInt(collection.elementSet().size());
         for (Multiset.Entry<String> entry : collection.entrySet()) {
             output.writeUTF(entry.getElement());
@@ -258,7 +256,7 @@ public class RedisBungeeListener implements Listener {
         }
     }
 
-    private void serializeMultimap(Multimap<String, String> collection, boolean includeNames, ByteArrayDataOutput output) {
+    private void serializeMultimap(Multimap<String, String> collection, boolean includeNames, DataOutputStream output) throws IOException {
         output.writeInt(collection.keySet().size());
         for (Map.Entry<String, Collection<String>> entry : collection.asMap().entrySet()) {
             output.writeUTF(entry.getKey());
@@ -270,7 +268,7 @@ public class RedisBungeeListener implements Listener {
         }
     }
 
-    private void serializeCollection(Collection<?> collection, ByteArrayDataOutput output) {
+    private void serializeCollection(Collection<?> collection, DataOutputStream output) throws IOException {
         output.writeInt(collection.size());
         for (Object o : collection) {
             output.writeUTF(o.toString());
